@@ -1390,7 +1390,7 @@ int
 iperf_send(struct iperf_test *test, fd_set *write_setP)
 {
     register int multisend, r, streams_active;
-    register struct iperf_stream *sp;
+    register struct iperf_stream *sp, *w;
     struct timeval now;
 
     /* Can we do multisend mode? */
@@ -1405,7 +1405,35 @@ iperf_send(struct iperf_test *test, fd_set *write_setP)
 	if (test->settings->rate != 0 && test->settings->burst == 0)
 	    gettimeofday(&now, NULL);
 	streams_active = 0;
+
+	/* Make a priority queue based on number of bytes sent */
+	while (!TAILQ_EMPTY(&test->work_streams)) {
+	  w = TAILQ_FIRST(&test->work_streams);
+	  TAILQ_REMOVE(&test->work_streams, w, work_streams);
+	}
+	assert(TAILQ_EMPTY(&test->work_streams));
 	SLIST_FOREACH(sp, &test->streams, streams) {
+	  if (TAILQ_EMPTY(&test->work_streams)) {
+	    TAILQ_INSERT_HEAD(&test->work_streams, sp, work_streams);
+	    //iperf_printf(test, "inserting (id=%d) %llu at head\n", sp->id, sp->result->bytes_sent);
+	  } else if (sp->result->bytes_sent >= TAILQ_LAST(&test->work_streams, worklisthead)->result->bytes_sent) {
+	    TAILQ_INSERT_TAIL(&test->work_streams, sp, work_streams);
+	    //iperf_printf(test, "inserting (id=%d) %llu at tail\n", sp->id, sp->result->bytes_sent);
+	  } else {
+	    TAILQ_FOREACH(w, &test->work_streams, work_streams) {
+	      if (sp->result->bytes_sent < w->result->bytes_sent) {
+	        TAILQ_INSERT_BEFORE(w, sp, work_streams);
+	        //iperf_printf(test, "inserting (id=%d) %llu before %llu\n", sp->id, sp->result->bytes_sent, w->result->bytes_sent);
+		break;
+	      }
+	    }
+	  }
+	}
+
+	/* Now that we have a list of streams ordered by the number of bytes
+	 * they've already sent, allow each of them to send if they want to and
+	 * are able to. Start with the one that has sent the least. */
+	TAILQ_FOREACH(sp, &test->work_streams, work_streams) {
 	    if ((sp->green_light && sp->sender &&
 		 (write_setP == NULL || FD_ISSET(sp->socket, write_setP)))) {
 		if ((r = sp->snd(sp)) < 0) {
@@ -1414,6 +1442,7 @@ iperf_send(struct iperf_test *test, fd_set *write_setP)
 		    i_errno = IESTREAMWRITE;
 		    return r;
 		}
+		//iperf_printf(test, "stream %d sent %d\n", sp->id, r);
 		streams_active = 1;
 		test->bytes_sent += r;
 		++test->blocks_sent;
@@ -2486,6 +2515,7 @@ iperf_reset_test(struct iperf_test *test)
     test->done = 0;
 
     SLIST_INIT(&test->streams);
+    TAILQ_INIT(&test->work_streams);
 
     test->role = 's';
     test->mode = RECEIVER;

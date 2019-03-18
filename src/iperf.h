@@ -208,6 +208,7 @@ struct iperf_stream
 
 //    struct iperf_stream *next;
     SLIST_ENTRY(iperf_stream) streams;
+    TAILQ_ENTRY(iperf_stream) work_streams;
 
     void     *data;
 };
@@ -331,6 +332,7 @@ struct iperf_test
     char      cookie[COOKIE_SIZE];
 //    struct iperf_stream *streams;               /* pointer to list of struct stream */
     SLIST_HEAD(slisthead, iperf_stream) streams;
+    TAILQ_HEAD(worklisthead, iperf_stream) work_streams;
     struct iperf_settings *settings;
 
     SLIST_HEAD(plisthead, protocol) protocols;
