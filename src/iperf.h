@@ -135,6 +135,7 @@ struct iperf_settings
     int       socket_bufsize;       /* window size for TCP */
     int       blksize;              /* size of read/writes (-l) */
     uint64_t  rate;                 /* target data rate for application pacing*/
+    int       rate_is_global;       /* indicates that the above data rate is global, not per stream */
     uint64_t  fqrate;               /* target data rate for FQ pacing*/
     int	      pacing_timer;	    /* pacing timer in microseconds */
     int       burst;                /* packets per burst */

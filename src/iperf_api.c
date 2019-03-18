@@ -752,6 +752,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"udp", no_argument, NULL, 'u'},
         {"bitrate", required_argument, NULL, 'b'},
         {"bandwidth", required_argument, NULL, 'b'},
+	{"global-bitrate", no_argument, NULL, OPT_BITRATE_IS_GLOBAL},
         {"time", required_argument, NULL, 't'},
         {"bytes", required_argument, NULL, 'n'},
         {"blockcount", required_argument, NULL, 'k'},
@@ -931,6 +932,9 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 		rate_flag = 1;
 		client_flag = 1;
                 break;
+	    case OPT_BITRATE_IS_GLOBAL:
+		test->settings->rate_is_global = 1;
+		break;
             case 't':
                 test->duration = atoi(optarg);
                 if (test->duration > MAX_TIME) {
@@ -1334,6 +1338,36 @@ iperf_set_send_state(struct iperf_test *test, signed char state)
 }
 
 void
+iperf_check_global_throttle(struct iperf_test *test, struct timeval *nowP)
+{
+    register struct iperf_stream *sp;
+    uint64_t agg_bytes_sent = 0;
+    uint64_t bits_per_second;
+    double max_seconds = 0;
+    double seconds = 0;
+
+    // iperf_size_t is unit64_t, result->bytes_sent is iperf_size_t
+    SLIST_FOREACH(sp, &test->streams, streams) {
+      agg_bytes_sent += sp->result->bytes_sent;
+      seconds = timeval_diff(&sp->result->start_time_fixed, nowP);
+      if (seconds > max_seconds)
+        max_seconds = seconds;
+    }
+    bits_per_second = agg_bytes_sent * 8 / max_seconds;
+    if (bits_per_second < test->settings->rate) {
+      SLIST_FOREACH(sp, &test->streams, streams) {
+        sp->green_light = 1;
+        FD_SET(sp->socket, &sp->test->write_set);
+      }
+    } else {
+      SLIST_FOREACH(sp, &test->streams, streams) {
+        sp->green_light = 0;
+        FD_CLR(sp->socket, &sp->test->write_set);
+      }
+    }
+}
+
+void
 iperf_check_throttle(struct iperf_stream *sp, struct timeval *nowP)
 {
     double seconds;
@@ -1383,8 +1417,13 @@ iperf_send(struct iperf_test *test, fd_set *write_setP)
 		streams_active = 1;
 		test->bytes_sent += r;
 		++test->blocks_sent;
-		if (test->settings->rate != 0 && test->settings->burst == 0)
-		    iperf_check_throttle(sp, &now);
+		if (test->settings->rate != 0 && test->settings->burst == 0) {
+                    if (test->settings->rate_is_global) {
+		        iperf_check_global_throttle(test, &now);
+		    } else {
+		        iperf_check_throttle(sp, &now);
+		    }
+		}
 		if (multisend > 1 && test->settings->bytes != 0 && test->bytes_sent >= test->settings->bytes)
 		    break;
 		if (multisend > 1 && test->settings->blocks != 0 && test->blocks_sent >= test->settings->blocks)
@@ -1463,7 +1502,11 @@ send_timer_proc(TimerClientData client_data, struct timeval *nowP)
     ** be sent to.  The actual sending gets done in the send proc, after
     ** checking the flag.
     */
-    iperf_check_throttle(sp, nowP);
+    if (sp->test->settings->rate_is_global) {
+      iperf_check_global_throttle(sp->test, nowP);
+    } else {
+      iperf_check_throttle(sp, nowP);
+    }
 }
 
 int

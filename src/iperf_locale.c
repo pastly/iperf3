@@ -135,6 +135,7 @@ const char usage_longstr[] = "Usage: iperf3 [-s|-c host] [options]\n"
                            "  -b, --bitrate #[KMG][/#]  target bitrate in bits/sec (0 for unlimited)\n"
                            "                            (default %d Mbit/sec for UDP, unlimited for TCP)\n"
                            "                            (optional slash and packet count for burst mode)\n"
+			   "  --global-bitrate          states that the --bitrate is a global limit, not per stream\n"
 			   "  --pacing-timer #[KMG]     set the timing for pacing, in microseconds (default 1000)\n"
 #if defined(HAVE_SO_MAX_PACING_RATE)
                            "  --fq-rate #[KMG]          enable fair-queuing based socket pacing in\n"
