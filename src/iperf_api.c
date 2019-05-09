@@ -3375,17 +3375,27 @@ iperf_print_results(struct iperf_test *test)
             }
 
             /* Print server output if we're on the client and it was requested/provided */
-            if (test->role == 'c' && iperf_get_test_get_server_output(test)) {
-                if (test->json_server_output) {
-                    iperf_printf(test, "\nServer JSON output:\n%s\n", cJSON_Print(test->json_server_output));
-                    cJSON_Delete(test->json_server_output);
-                    test->json_server_output = NULL;
-                }
-                if (test->server_output_text) {
-                    iperf_printf(test, "\nServer output:\n%s\n", test->server_output_text);
-                    test->server_output_text = NULL;
-                }
-            }
+	    /* Commented out, because this seems to output and delete the
+	     * server's JSON output before we (the client) get the chance to
+	     * include it in our own JSON output ... when the --bidir flag is
+	     * set. WTF why? Usually iperf will produce
+	     *   { ... bunch of stats from client ..., server_output_json: {}}
+	     * but with --bidir and --get-server-output, iperf produces
+	     *   Server JSON output:
+	     *   { ... server output ... }
+	     *   { ... client output ... }
+	     */
+            //if (test->role == 'c' && iperf_get_test_get_server_output(test)) {
+            //    if (test->json_server_output) {
+            //        iperf_printf(test, "\nServer JSON output:\n%s\n", cJSON_Print(test->json_server_output));
+            //        cJSON_Delete(test->json_server_output);
+            //        test->json_server_output = NULL;
+            //    }
+            //    if (test->server_output_text) {
+            //        iperf_printf(test, "\nServer output:\n%s\n", test->server_output_text);
+            //        test->server_output_text = NULL;
+            //    }
+            //}
         }
     }
 
